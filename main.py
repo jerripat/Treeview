@@ -1,7 +1,8 @@
-from tkinter import *
-from tkinter import ttk, messagebox
-from pathlib import Path
+
 import sqlite3
+from pathlib import Path
+from tkinter import *
+from tkinter import ttk, messagebox, colorchooser
 
 # ==================================================
 # MAIN WINDOW
@@ -23,30 +24,18 @@ conn = sqlite3.connect(DB_FILE)
 c = conn.cursor()
 
 c.execute("""
-          CREATE TABLE IF NOT EXISTS customers
-          (
-              name
-              TEXT
-              NOT
-              NULL,
-              address
-              TEXT,
-              phone
-              TEXT,
-              email
-              TEXT,
-              city
-              TEXT,
-              state
-              TEXT,
-              zip
-              TEXT,
-              sort_order
-              INTEGER
-          )
+    CREATE TABLE IF NOT EXISTS customers (
+        name TEXT NOT NULL,
+        address TEXT,
+        phone TEXT,
+        email TEXT,
+        city TEXT,
+        state TEXT,
+        zip TEXT,
+        sort_order INTEGER
+    )
 """)
 
-# Add sort_order to an older database if necessary.
 c.execute("PRAGMA table_info(customers)")
 existing_columns = [row[1] for row in c.fetchall()]
 
@@ -55,44 +44,44 @@ if "sort_order" not in existing_columns:
         "ALTER TABLE customers ADD COLUMN sort_order INTEGER"
     )
 
-# Assign an order to existing records.
+# Assign sort_order to existing records
 c.execute("""
-          SELECT rowid
-          FROM customers
-          WHERE sort_order IS NULL
-          ORDER BY rowid
+    SELECT rowid FROM customers
+    WHERE sort_order IS NULL
+    ORDER BY rowid
 """)
 
 missing_order = c.fetchall()
 
-c.execute(
-    "SELECT COALESCE(MAX(sort_order), 0) FROM customers"
-)
+c.execute("SELECT COALESCE(MAX(sort_order), 0) FROM customers")
 next_order = c.fetchone()[0]
 
 for (customer_id,) in missing_order:
     next_order += 1
     c.execute(
-        "UPDATE customers SET sort_order = ? WHERE rowid = ?",
+        "UPDATE customers SET sort_order=? WHERE rowid=?",
         (next_order, customer_id)
     )
 
 conn.commit()
 
 # ==================================================
-# SAMPLE CUSTOMER DATA
+# SAMPLE DATA
 # ==================================================
 
-
-# Only insert sample data for a newly created database.
 if new_database:
-    for index, customer in enumerate(customers):
+    try:
+        from data import customers
+    except ImportError:
+        customers = []
+
+    for index, customer in enumerate(customers, start=1):
         c.execute("""
-                  INSERT INTO customers
-                  (name, address, phone, email,
-                   city, state, zip, sort_order)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (*customer, index + 1))
+            INSERT INTO customers
+            (name, address, phone, email,
+             city, state, zip, sort_order)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (*customer, index))
 
     conn.commit()
 
@@ -104,21 +93,21 @@ style = ttk.Style()
 style.theme_use("clam")
 
 style.configure(
-    "Treeview",
-    background="#D3D3D3",
+    "Custom.Treeview",
+    background="#FFFFFF",
     foreground="black",
+    fieldbackground="#FFFFFF",
     rowheight=27,
-    fieldbackground="#D3D3D3",
     font=("Arial", 10)
 )
 
 style.configure(
-    "Treeview.Heading",
+    "Custom.Treeview.Heading",
     font=("Arial", 10, "bold")
 )
 
 style.map(
-    "Treeview",
+    "Custom.Treeview",
     background=[("selected", "#347083")],
     foreground=[("selected", "white")]
 )
@@ -156,6 +145,7 @@ my_tree = ttk.Treeview(
     columns=columns,
     show="headings",
     selectmode="extended",
+    style="Custom.Treeview",
     yscrollcommand=tree_scroll.set,
     xscrollcommand=bottom_scroll.set
 )
@@ -196,6 +186,105 @@ my_tree.tag_configure(
     background="#E6F2FF",
     foreground="black"
 )
+
+# ==================================================
+# COLOR FUNCTIONS
+# ==================================================
+
+def primary_color():
+    color = colorchooser.askcolor(
+        title="Choose Primary Row Color"
+    )[1]
+
+    if color:
+        my_tree.tag_configure(
+            "evenrow",
+            background=color
+        )
+
+
+def secondary_color():
+    color = colorchooser.askcolor(
+        title="Choose Secondary Row Color"
+    )[1]
+
+    if color:
+        my_tree.tag_configure(
+            "oddrow",
+            background=color
+        )
+
+
+def highlight_color():
+    color = colorchooser.askcolor(
+        title="Choose Highlight Color"
+    )[1]
+
+    if color:
+        style.map(
+            "Custom.Treeview",
+            background=[("selected", color)],
+            foreground=[("selected", "white")]
+        )
+
+
+def reset_colors():
+    my_tree.tag_configure(
+        "evenrow",
+        background="#FFFFFF"
+    )
+
+    my_tree.tag_configure(
+        "oddrow",
+        background="#E6F2FF"
+    )
+
+    style.map(
+        "Custom.Treeview",
+        background=[("selected", "#347083")],
+        foreground=[("selected", "white")]
+    )
+
+# ==================================================
+# OPTIONS MENU
+# ==================================================
+
+my_menu = Menu(root)
+root.config(menu=my_menu)
+
+option_menu = Menu(my_menu, tearoff=0)
+
+my_menu.add_cascade(
+    label="Options",
+    menu=option_menu
+)
+
+option_menu.add_command(
+    label="Primary Color",
+    command=primary_color
+)
+
+option_menu.add_command(
+    label="Secondary Color",
+    command=secondary_color
+)
+
+option_menu.add_command(
+    label="Highlight Color",
+    command=highlight_color
+)
+
+option_menu.add_separator()
+
+option_menu.add_command(
+    label="Reset Colors",
+    command=reset_colors
+)
+
+option_menu.add_separator()
+
+# Exit command is added after close_application
+# is defined below.
 
 # ==================================================
 # DATA ENTRY FRAME
@@ -297,10 +386,7 @@ def refresh_row_colors():
     for index, item in enumerate(my_tree.get_children()):
         tag = "evenrow" if index % 2 == 0 else "oddrow"
 
-        my_tree.item(
-            item,
-            tags=(tag,)
-        )
+        my_tree.item(item, tags=(tag,))
 
 
 def get_selected_record():
@@ -309,7 +395,6 @@ def get_selected_record():
     if not selected:
         return None
 
-    # Use the focused selected row, when possible.
     focused = my_tree.focus()
 
     if focused in selected:
@@ -317,9 +402,8 @@ def get_selected_record():
 
     return selected[0]
 
-
 # ==================================================
-# LOAD CUSTOMER RECORDS FROM DATABASE
+# LOAD CUSTOMERS
 # ==================================================
 
 def load_customers():
@@ -327,16 +411,10 @@ def load_customers():
         my_tree.delete(item)
 
     c.execute("""
-              SELECT rowid,
-                     name,
-                     address,
-                     phone,
-                     email,
-                     city,
-                     state,
-                     zip
-              FROM customers
-              ORDER BY sort_order, rowid
+        SELECT rowid, name, address, phone,
+               email, city, state, zip
+        FROM customers
+        ORDER BY sort_order, rowid
     """)
 
     records = c.fetchall()
@@ -354,9 +432,8 @@ def load_customers():
 
     refresh_row_colors()
 
-
 # ==================================================
-# SELECT RECORD FOR EDITING
+# SELECT RECORD
 # ==================================================
 
 def select_record():
@@ -378,9 +455,7 @@ def select_record():
         entry.insert(0, value)
 
     editing_record = selected
-
     name_entry.focus_set()
-
 
 # ==================================================
 # ADD RECORD
@@ -397,17 +472,17 @@ def add_record():
         return
 
     c.execute("""
-              SELECT COALESCE(MAX(sort_order), 0) + 1
-              FROM customers
+        SELECT COALESCE(MAX(sort_order), 0) + 1
+        FROM customers
     """)
 
     sort_order = c.fetchone()[0]
 
     c.execute("""
-              INSERT INTO customers
-              (name, address, phone, email,
-               city, state, zip, sort_order)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO customers
+        (name, address, phone, email,
+         city, state, zip, sort_order)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """, (*values, sort_order))
 
     customer_id = c.lastrowid
@@ -427,7 +502,6 @@ def add_record():
         "Success",
         "Customer added successfully."
     )
-
 
 # ==================================================
 # SAVE CHANGES
@@ -455,15 +529,15 @@ def save_changes():
     customer_id = int(editing_record)
 
     c.execute("""
-              UPDATE customers
-              SET name    = ?,
-                  address = ?,
-                  phone   = ?,
-                  email   = ?,
-                  city    = ?,
-                  state   = ?,
-                  zip     = ?
-              WHERE rowid = ?
+        UPDATE customers
+        SET name=?,
+            address=?,
+            phone=?,
+            email=?,
+            city=?,
+            state=?,
+            zip=?
+        WHERE rowid=?
     """, (*values, customer_id))
 
     conn.commit()
@@ -480,9 +554,8 @@ def save_changes():
         "Customer updated successfully."
     )
 
-
 # ==================================================
-# REMOVE ONE RECORD
+# REMOVE ONE
 # ==================================================
 
 def remove_one():
@@ -496,13 +569,13 @@ def remove_one():
         return
 
     if not messagebox.askyesno(
-            "Confirm Delete",
-            "Delete the selected customer?"
+        "Confirm Delete",
+        "Delete the selected customer?"
     ):
         return
 
     c.execute(
-        "DELETE FROM customers WHERE rowid = ?",
+        "DELETE FROM customers WHERE rowid=?",
         (int(selected),)
     )
 
@@ -512,9 +585,8 @@ def remove_one():
     refresh_row_colors()
     clear_entries()
 
-
 # ==================================================
-# REMOVE MANY RECORDS
+# REMOVE MANY
 # ==================================================
 
 def remove_many():
@@ -528,18 +600,15 @@ def remove_many():
         return
 
     if not messagebox.askyesno(
-            "Confirm Delete",
-            f"Delete {len(selected)} selected customers?"
+        "Confirm Delete",
+        f"Delete {len(selected)} selected customers?"
     ):
         return
 
-    customer_ids = [
-        (int(item),)
-        for item in selected
-    ]
+    customer_ids = [(int(item),) for item in selected]
 
     c.executemany(
-        "DELETE FROM customers WHERE rowid = ?",
+        "DELETE FROM customers WHERE rowid=?",
         customer_ids
     )
 
@@ -551,15 +620,14 @@ def remove_many():
     refresh_row_colors()
     clear_entries()
 
-
 # ==================================================
-# REMOVE ALL RECORDS
+# REMOVE ALL
 # ==================================================
 
 def remove_all():
     if not messagebox.askyesno(
-            "Confirm Delete",
-            "Are you sure you want to delete ALL customers?"
+        "Confirm Delete",
+        "Are you sure you want to delete ALL customers?"
     ):
         return
 
@@ -571,9 +639,8 @@ def remove_all():
 
     clear_entries()
 
-
 # ==================================================
-# SAVE TREEVIEW ROW ORDER
+# SAVE ROW ORDER
 # ==================================================
 
 def save_row_order():
@@ -584,21 +651,17 @@ def save_row_order():
         for index, item in enumerate(items, start=1)
     ]
 
-    c.executemany(
-        """
+    c.executemany("""
         UPDATE customers
-        SET sort_order = ?
-        WHERE rowid = ?
-        """,
-        updates
-    )
+        SET sort_order=?
+        WHERE rowid=?
+    """, updates)
 
     conn.commit()
     refresh_row_colors()
 
-
 # ==================================================
-# MOVE RECORD UP
+# MOVE UP
 # ==================================================
 
 def move_up():
@@ -610,17 +673,11 @@ def move_up():
     index = my_tree.index(selected)
 
     if index > 0:
-        my_tree.move(
-            selected,
-            "",
-            index - 1
-        )
-
+        my_tree.move(selected, "", index - 1)
         save_row_order()
 
-
 # ==================================================
-# MOVE RECORD DOWN
+# MOVE DOWN
 # ==================================================
 
 def move_down():
@@ -633,14 +690,8 @@ def move_down():
     total = len(my_tree.get_children())
 
     if index < total - 1:
-        my_tree.move(
-            selected,
-            "",
-            index + 1
-        )
-
+        my_tree.move(selected, "", index + 1)
         save_row_order()
-
 
 # ==================================================
 # COMMAND BUTTONS
@@ -688,7 +739,7 @@ for index, (text, command) in enumerate(buttons):
     )
 
 # ==================================================
-# DOUBLE-CLICK TO SELECT
+# DOUBLE CLICK
 # ==================================================
 
 my_tree.bind(
@@ -696,9 +747,8 @@ my_tree.bind(
     lambda event: select_record()
 )
 
-
 # ==================================================
-# CLOSE DATABASE SAFELY
+# CLOSE APPLICATION
 # ==================================================
 
 def close_application():
@@ -706,7 +756,15 @@ def close_application():
     root.destroy()
 
 
-root.protocol("WM_DELETE_WINDOW", close_application)
+option_menu.add_command(
+    label="Exit",
+    command=close_application
+)
+
+root.protocol(
+    "WM_DELETE_WINDOW",
+    close_application
+)
 
 # ==================================================
 # START APPLICATION
