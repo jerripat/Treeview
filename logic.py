@@ -139,7 +139,15 @@ def my_menu():
         else:
             print("Invalid choice. Please try again.")
 
+def drop_table():
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
 
+    c.execute("DROP TABLE IF EXISTS customers")
+    conn.commit()
+    conn.close()
+    print("Table dropped successfully!")
+drop_table()
 # Start the program
 if __name__ == "__main__":
     setup_database()
