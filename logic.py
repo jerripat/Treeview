@@ -147,7 +147,7 @@ def drop_table():
     conn.commit()
     conn.close()
     print("Table dropped successfully!")
-drop_table()
+#drop_table()
 # Start the program
 if __name__ == "__main__":
     setup_database()

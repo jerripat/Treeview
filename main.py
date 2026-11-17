@@ -128,7 +128,7 @@ root = tk.Tk()
 root.title("Customer Management System")
 root.geometry("1250x650")
 root.minsize(950, 550)
-
+root.config(bg="lightblue")
 style = ttk.Style()
 style.theme_use("clam")
 style.configure(
